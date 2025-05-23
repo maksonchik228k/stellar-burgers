@@ -1,23 +1,29 @@
-import { FC, useMemo } from 'react';
+import { FC, useMemo, useEffect } from 'react';
+import { useDispatch, useSelector } from '@services/store';
+import { useParams } from 'react-router-dom';
+import { fetchOrderByNumberOrders } from '@slices';
+import {
+  selectCurrentOrder,
+  selectOrderByNumberLoading,
+  selectIngredients
+} from '@selectors';
 import { Preloader } from '../ui/preloader';
 import { OrderInfoUI } from '../ui/order-info';
 import { TIngredient } from '@utils-types';
 
 export const OrderInfo: FC = () => {
-  /** TODO: взять переменные orderData и ingredients из стора */
-  const orderData = {
-    createdAt: '',
-    ingredients: [],
-    _id: '',
-    status: '',
-    name: '',
-    updatedAt: 'string',
-    number: 0
-  };
+  const dispatch = useDispatch();
+  const { number } = useParams<{ number: string }>();
+  const orderData = useSelector(selectCurrentOrder);
+  const ingredients = useSelector(selectIngredients);
+  const isLoading = useSelector(selectOrderByNumberLoading);
 
-  const ingredients: TIngredient[] = [];
+  useEffect(() => {
+    if (number && (!orderData || orderData.number !== Number(number))) {
+      dispatch(fetchOrderByNumberOrders(Number(number)));
+    }
+  }, [dispatch, number, orderData]);
 
-  /* Готовим данные для отображения */
   const orderInfo = useMemo(() => {
     if (!orderData || !ingredients.length) return null;
 
@@ -28,38 +34,33 @@ export const OrderInfo: FC = () => {
     };
 
     const ingredientsInfo = orderData.ingredients.reduce(
-      (acc: TIngredientsWithCount, item) => {
+      (acc: TIngredientsWithCount, item: string) => {
         if (!acc[item]) {
           const ingredient = ingredients.find((ing) => ing._id === item);
           if (ingredient) {
-            acc[item] = {
-              ...ingredient,
-              count: 1
-            };
+            acc[item] = { ...ingredient, count: 1 };
           }
         } else {
           acc[item].count++;
         }
-
         return acc;
       },
-      {}
+      {} as TIngredientsWithCount
     );
 
-    const total = Object.values(ingredientsInfo).reduce(
-      (acc, item) => acc + item.price * item.count,
+    const values = Object.values(ingredientsInfo) as (TIngredient & {
+      count: number;
+    })[];
+    const total = values.reduce(
+      (acc: number, item: TIngredient & { count: number }) =>
+        acc + item.price * item.count,
       0
     );
 
-    return {
-      ...orderData,
-      ingredientsInfo,
-      date,
-      total
-    };
+    return { ...orderData, ingredientsInfo, date, total };
   }, [orderData, ingredients]);
 
-  if (!orderInfo) {
+  if (isLoading || !orderInfo) {
     return <Preloader />;
   }
 
